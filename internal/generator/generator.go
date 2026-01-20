@@ -20,8 +20,9 @@ func New(doc *openapi3.T) *Generator {
 // GenerateMarkdown generates markdown documentation for a specific endpoint.
 // path is the endpoint path (e.g., "/users/{id}").
 // pathItem contains the OpenAPI path item definition.
+// method is an optional HTTP method filter (e.g., "GET", "POST"). Empty string means all methods.
 // Returns a markdown-formatted string.
-func (g *Generator) GenerateMarkdown(path string, pathItem *openapi3.PathItem) string {
+func (g *Generator) GenerateMarkdown(path string, pathItem *openapi3.PathItem, method string) string {
 	if pathItem == nil {
 		return ""
 	}
@@ -29,7 +30,7 @@ func (g *Generator) GenerateMarkdown(path string, pathItem *openapi3.PathItem) s
 	var md strings.Builder
 
 	g.writeHeader(&md, path)
-	g.writeOperations(&md, path, pathItem)
+	g.writeOperations(&md, path, pathItem, method)
 
 	return md.String()
 }
@@ -56,10 +57,16 @@ func (g *Generator) writeHeader(md *strings.Builder, path string) {
 	}
 }
 
-// writeOperations writes all HTTP operations for the endpoint.
-func (g *Generator) writeOperations(md *strings.Builder, path string, pathItem *openapi3.PathItem) {
+// writeOperations writes all HTTP operations for the endpoint, optionally filtered by method.
+// methodFilter is an uppercase HTTP method (e.g., "GET", "POST") or empty string for all methods.
+func (g *Generator) writeOperations(md *strings.Builder, path string, pathItem *openapi3.PathItem, methodFilter string) {
 	for method, operation := range pathItem.Operations() {
 		if operation == nil {
+			continue
+		}
+
+		// Filter by method if specified
+		if methodFilter != "" && method != methodFilter {
 			continue
 		}
 

@@ -13,33 +13,84 @@ import (
 
 const maxFileSize = 100 * 1024 * 1024 // 100MB limit
 
+var (
+	methodFlag = flag.String("method", "", "HTTP method to filter (GET, POST, PUT, DELETE, PATCH, etc.). If not specified, shows all methods.")
+)
+
+// Common HTTP methods for validation
+var httpMethods = map[string]bool{
+	"GET":     true,
+	"POST":    true,
+	"PUT":     true,
+	"DELETE":  true,
+	"PATCH":   true,
+	"HEAD":    true,
+	"OPTIONS": true,
+	"TRACE":   true,
+	"CONNECT": true,
+}
+
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s <endpoint-path> <openapi-file>\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\nExample:\n")
-		fmt.Fprintf(os.Stderr, "  %s /app/v1/events/{id} openapi.yaml\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  %s [METHOD] <endpoint-path> <openapi-file>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -method METHOD <endpoint-path> <openapi-file>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  %s /events/{event_id} openapi.yaml                    # All methods\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s GET /events/{event_id} openapi.yaml                # GET only\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s PUT /events/{event_id} openapi.yaml                # PUT only\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -method DELETE /events/{event_id} openapi.yaml     # DELETE only\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nFlags:\n")
+		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nArguments:\n")
+		fmt.Fprintf(os.Stderr, "  METHOD          Optional HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)\n")
 		fmt.Fprintf(os.Stderr, "  endpoint-path   API endpoint path to extract documentation for\n")
 		fmt.Fprintf(os.Stderr, "  openapi-file    Path to OpenAPI YAML specification file\n")
 	}
 
 	flag.Parse()
 
-	if flag.NArg() != 2 {
+	// Parse arguments - support both positional method and flag-based method
+	var method, endpointPath, openapiFile string
+
+	args := flag.Args()
+	nArgs := len(args)
+
+	// Case 1: 3 args - check if first arg is HTTP method (positional syntax)
+	// Example: docfinder GET /events/{id} openapi.yaml
+	if nArgs == 3 && isHTTPMethod(args[0]) {
+		method = args[0]
+		endpointPath = args[1]
+		openapiFile = args[2]
+	} else if nArgs == 2 {
+		// Case 2: 2 args - standard format
+		// Example: docfinder /events/{id} openapi.yaml
+		// Or: docfinder -method GET /events/{id} openapi.yaml
+		endpointPath = args[0]
+		openapiFile = args[1]
+		method = *methodFlag
+	} else {
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	endpointPath := flag.Arg(0)
-	openapiFile := flag.Arg(1)
+	// Flag takes precedence over positional method
+	if *methodFlag != "" {
+		method = *methodFlag
+	}
 
-	if err := run(endpointPath, openapiFile); err != nil {
+	if err := run(endpointPath, openapiFile, method); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(endpointPath, openapiFile string) error {
+// isHTTPMethod checks if a string is a valid HTTP method
+func isHTTPMethod(s string) bool {
+	return httpMethods[strings.ToUpper(s)]
+}
+
+func run(endpointPath, openapiFile, method string) error {
 	// Validate input file
 	if err := validateInputFile(openapiFile); err != nil {
 		return err
@@ -60,11 +111,38 @@ func run(endpointPath, openapiFile string) error {
 		return err
 	}
 
+	// Normalize method (convert to uppercase for comparison with OpenAPI operations)
+	method = strings.ToUpper(strings.TrimSpace(method))
+
+	// Validate method if specified
+	if method != "" {
+		if err := validateMethod(pathItem, method); err != nil {
+			return err
+		}
+	}
+
 	// Generate markdown documentation
 	gen := generator.New(doc)
-	markdown := gen.GenerateMarkdown(endpointPath, pathItem)
+	markdown := gen.GenerateMarkdown(endpointPath, pathItem, method)
 	fmt.Print(markdown)
 
+	return nil
+}
+
+// validateMethod checks if the specified HTTP method exists for the path item.
+func validateMethod(pathItem *openapi3.PathItem, method string) error {
+	operations := pathItem.Operations()
+
+	// The operations map keys are already lowercase
+	if operations[method] == nil {
+		// Build a list of available methods (sorted for consistency)
+		var available []string
+		for m := range operations {
+			available = append(available, m)
+		}
+		return fmt.Errorf("method '%s' not found for this endpoint. Available methods: %s",
+			method, strings.Join(available, ", "))
+	}
 	return nil
 }
 

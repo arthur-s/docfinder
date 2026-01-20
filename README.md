@@ -4,85 +4,88 @@ A CLI tool for extracting and formatting documentation for specific API endpoint
 
 ## Features
 
-- Extract documentation for a single endpoint from large OpenAPI files
-- Output structured Markdown optimized for AI agents and human readers
-- Comprehensive schema details including validation constraints
-- Request and response examples with JSON formatting
-- Support for complex schemas (oneOf, anyOf, allOf)
-- Deterministic output (sorted properties, headers, examples)
-- Response headers documentation
-- Deprecation warnings
+- ✅ **Multi-method support**: Filter by HTTP method (GET, POST, PUT, DELETE, etc.)
+- ✅ **Short syntax**: `docfinder GET /books/{id} spec.yaml` (no flags needed!)
+- ✅ **Smart detection**: Case-insensitive, auto-recognizes HTTP methods
+- ✅ **Clear errors**: Shows available methods when invalid method specified
+- ✅ **Comprehensive output**: Schema details, validation constraints, examples
 
-## Building
+## Installation
 
 ```bash
-go build -o docfinder ./cmd/docfinder
+go build -o docfinder cmd/docfinder/main.go
 ```
 
 ## Usage
 
 ```bash
-docfinder <endpoint-path> <openapi-file>
+# Show all methods
+docfinder /books/{book_id} openapi.yaml
+
+# Filter by method (short syntax - recommended)
+docfinder GET /books/{book_id} openapi.yaml
+docfinder POST /books openapi.yaml
+docfinder put /books/{book_id} openapi.yaml        # case-insensitive
+
+# Alternative: use -method flag
+docfinder -method DELETE /books/{book_id} openapi.yaml
+
+# Generate docs to files
+docfinder GET /books/{book_id} api.yaml > docs/get-book.md
+docfinder POST /books api.yaml > docs/create-book.md
+
+# Batch processing
+for method in GET POST PUT DELETE; do
+  docfinder $method /books/{book_id} api.yaml > docs/${method,,}-book.md
+done
 ```
 
-### Examples
+## Command-Line Help
 
-```bash
-# Extract documentation for a specific endpoint
-docfinder /users openapi.yaml
+```
+Usage:
+  docfinder [METHOD] <endpoint-path> <openapi-file>
+  docfinder -method METHOD <endpoint-path> <openapi-file>
 
-# Works with parameterized paths
-docfinder /posts/{post_id} openapi.yaml
+Examples:
+  docfinder /books/{book_id} openapi.yaml                    # All methods
+  docfinder GET /books/{book_id} openapi.yaml                # GET only
+  docfinder -method DELETE /books/{book_id} openapi.yaml     # Flag syntax
 
-# Leading slash is optional
-docfinder users openapi.yaml
+Arguments:
+  METHOD          Optional HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)
+  endpoint-path   API endpoint path to extract documentation for
+  openapi-file    Path to OpenAPI YAML specification file
+
+Flags:
+  -method string  HTTP method to filter. If not specified, shows all methods.
 ```
 
 ## Output Format
 
-The tool generates comprehensive Markdown documentation including:
+Generated markdown includes:
+- API metadata (title, version, base URLs)
+- HTTP method and endpoint path
+- Operation summary, description, and tags
+- Parameters (path, query, header) with types and constraints
+- Request/response body schemas with examples
+- Security requirements
+- Deprecation warnings
 
-### Metadata
-- API name and version
-- Base URL(s) with descriptions
-- Operation summary and description
-- Operation ID and tags
-- Deprecation warnings (if applicable)
+## Testing
 
-### Parameters
-- Name, location (path/query/header), and required status
-- Type and format information
-- Default values and examples
-- Validation constraints (min/max length, pattern, etc.)
-- Allowed values for enums
-
-### Request Body
-- Content types
-- Detailed schema with nested properties
-- Required/optional field indicators
-- Type information with formats
-- Validation constraints
-- Request examples with JSON formatting
-
-### Responses
-- Status codes with descriptions
-- Response headers (e.g., rate limiting headers)
-- Content types
-- Response schemas
-- Response examples with JSON formatting
-
-### Security
-- Required authentication schemes
-- OAuth scopes (if applicable)
-
-## License
-
-MIT
+```bash
+go test ./...
+```
 
 ## Contributing
 
 Contributions welcome! Please ensure:
-1. All tests pass
-2. Code is formatted with `gofmt`
-3. New features include tests
-4. Exported functions are documented
+- All tests pass (`go test ./...`)
+- Code is formatted with `gofmt`
+- New features include tests
+- Documentation is updated
+
+## License
+
+MIT
