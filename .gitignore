@@ -21,7 +21,7 @@ vendor/
 /bin/
 /dist/
 /build/
-docfinder
+/docfinder
 
 # IDE specific files
 .vscode/
